@@ -72,7 +72,8 @@ var stats,
 	controls,
 	tween,
 	camTarget,
-	solarSystem;
+	solarSystem,
+	dae;
 
 var trajectory;
 
@@ -81,9 +82,6 @@ var clock = new THREE.Clock();
 
 var mouse = { x: -1000, y: 0 }, 
 	INTERSECTED;
-
-var dae;
-var loader = new THREE.ColladaLoader();
 
 var timer = function(){
 	this.count = 1;
@@ -97,6 +95,93 @@ function vec3Mid( vec1, vec2 ){
 	vec.y = (vec1.y + vec2.y) / 2;
 	vec.z = (vec1.z + vec2.z) / 2;
 	return vec;
+}
+
+var camPosition = function( position, target, time ){
+	this.tween = function(){
+		TWEEN.removeAll();
+		camTweener( position, target, time );
+	};
+	return this;
+}
+
+function camTweener( newCamPosition, newTarget, time ) {
+
+	var camCurrentPosition	= camera.position;
+	var camCurrentRotation	= camera.rotation;
+	var camCurrentTarget = camTarget;
+
+	tweenPosition = new TWEEN.Tween( camCurrentPosition )
+		.to( newCamPosition , time )
+		.delay(0)
+		.easing(TWEEN.Easing.Sinusoidal.InOut)
+		.onUpdate( function() {
+			camera.position = camCurrentPosition;
+			camera.rotation = camCurrentRotation;
+			// camera.lookAt( camCurrentTarget );
+		});
+
+	tweenLookAt = new TWEEN.Tween( camCurrentTarget )
+		.to( newTarget, time)
+		.delay(0)
+		.easing(TWEEN.Easing.Sinusoidal.InOut)
+		.onComplete( function(){
+			camera.lookAt( newTarget );
+		});
+
+	tweenPosition.start();
+	tweenLookAt.start();
+}
+
+function addLensFlare( x, y, z, size, overrideImage ){
+
+	var flareColor = new THREE.Color( 0xffffff );
+
+	var lensFlare = new THREE.LensFlare( overrideImage, 700, 0.0, THREE.AdditiveBlending, flareColor );
+
+	var textureFlare0 = THREE.ImageUtils.loadTexture( "./textures/lensflare/lensflare0.png" );
+	var textureFlare2 = THREE.ImageUtils.loadTexture( "./textures/lensflare/lensflare2.png" );
+	var textureFlare3 = THREE.ImageUtils.loadTexture( "./textures/lensflare/lensflare3.png" );
+
+	lensFlare.add( textureFlare0, 200, 0.0, THREE.AdditiveBlending );
+	lensFlare.add( textureFlare2, 512, 0.0, THREE.AdditiveBlending );
+	lensFlare.add( textureFlare2, 512, 0.0, THREE.AdditiveBlending );
+	lensFlare.add( textureFlare2, 512, 0.0, THREE.AdditiveBlending );
+
+	lensFlare.add( textureFlare3, 60, 0.6, THREE.AdditiveBlending );
+	lensFlare.add( textureFlare3, 70, 0.7, THREE.AdditiveBlending );
+	lensFlare.add( textureFlare3, 120, 0.9, THREE.AdditiveBlending );
+	lensFlare.add( textureFlare3, 70, 1.0, THREE.AdditiveBlending );
+
+	lensFlare.customUpdateCallback = lensFlareUpdateCallback;
+
+	lensFlare.position = new THREE.Vector3(x,y,z);
+	lensFlare.size = size ? size : 16000 ;
+	return lensFlare;
+
+}
+
+function lensFlareUpdateCallback( object ) {
+
+	var f, fl = object.lensFlares.length;
+	var flare;
+	var vecX = -object.positionScreen.x * 2;
+	var vecY = -object.positionScreen.y * 2;
+
+
+	for( f = 0; f < fl; f++ ) {
+
+	   flare = object.lensFlares[ f ];
+
+	   flare.x = object.positionScreen.x + vecX * flare.distance;
+	   flare.y = object.positionScreen.y + vecY * flare.distance;
+
+	   flare.rotation = 0;
+
+	}
+
+	object.lensFlares[ 2 ].y += 0.025;
+	object.lensFlares[ 3 ].rotation = object.positionScreen.x * 0.5 + THREE.Math.degToRad( 45 );
 }
 
 
@@ -115,6 +200,8 @@ $(document).ready( function() {
 	$( '#loadtext' ).show();
 	setLoadMessage("Loading the Solar System");
 
+	// Load the Galaxy Collada
+	var loader = new THREE.ColladaLoader();
 	loader.options.convertUpAxis = true;
 	loader.load( 'meshes/galaxy.dae', function ( collada ) {
 
@@ -130,13 +217,14 @@ $(document).ready( function() {
 	});
 
 	var postShadersLoaded = function () {
-	        init();
+	        initThreeD();
 	        animate();
 			$("#loadtext").hide();
     };
 } );
 
-function init() {
+
+function initThreeD() {
 
 	/********************************
 		SCENE SETUP
@@ -156,10 +244,10 @@ function init() {
 	fovValue = 0.5 / Math.tan(camera.fov * Math.PI / 360) * HEIGHT;
 	
 	var ambientLight = new THREE.AmbientLight( 0x404040 );
-	ambientLight.color.setRGB( .35, .35, .35 );
+	ambientLight.color.setRGB( .30, .30, .30 );
 	scene.add(ambientLight);
 
-	var pointLight = new THREE.PointLight(0xFFFFFF, 1.3);
+	var pointLight = new THREE.PointLight(0xFFFFFF, 1.25);
 
 	pointLight.position.x = 0;
 	pointLight.position.y = 0;
@@ -167,9 +255,52 @@ function init() {
 
 	scene.add(pointLight);
 
+	solarSystem = makeSolarSystem();
+
+    var systemSize = 10000;
+    var stars = new THREE.Geometry();
+
+    for ( i = 0; i < 10000; i ++ ) {
+
+        var vertex = new THREE.Vector3();
+        vertex.x = Math.random() * systemSize - systemSize/2;
+        vertex.y = Math.random() * systemSize - systemSize/2;
+        vertex.z = Math.random() * systemSize - systemSize/2;
+
+        stars.vertices.push( vertex );
+    }
+
+    var starMaterial =   new THREE.ParticleBasicMaterial({
+        color: 0xFFFFFF,
+        size: 20,
+        map: THREE.ImageUtils.loadTexture( "textures/star.png" ),
+        blending: THREE.AdditiveBlending,
+        transparent: true
+    });
+
+    var starField = new THREE.ParticleSystem( stars, starMaterial );
+
+    starField.rotation.x = Math.random() * 6;
+    starField.rotation.y = Math.random() * 6;
+    starField.rotation.z = Math.random() * 6;
+
+	solarSystem.add( starField );
+
+	lensFlares = new THREE.Object3D();
+	var override = THREE.ImageUtils.loadTexture( "textures/lensflare/hexangle.png" );
+	var sunFlare = addLensFlare( 0, 0, 10, 5, override );
+	lensFlares.add( sunFlare );
+
+	scene.add( dae );
+	scene.add( solarSystem );
+	scene.add( lensFlares );
+
+	// Camera Positions for GUI
 	camOne = new camPosition( { x: 0, y: 50, z: 500 }, { x: 0, y: 0, z: 0 }, 1500 );
 	camTwo = new camPosition( { x: 0, y: 12000, z: 500 }, { x: 0, y: 0, z: 0 }, 5000 );
 	camThree = new camPosition( { x: -500, y: 250, z: -1000 }, { x: 0, y: 0, z: 0 }, 3000 );
+
+	t = new timer();
 
 
 	/********************************
@@ -188,10 +319,6 @@ function init() {
 	controls.minDistance = 0;
 	controls.maxDistance = 12000;
 
-	t = new timer();
-	setupScene();
-	buildGUI();
-
 
 	/********************************
 		STATS
@@ -202,21 +329,12 @@ function init() {
 	stats.domElement.style.top = '0px';
 	$container.append( stats.domElement );
 
-	document.addEventListener( 'mousemove', onDocumentMouseMove, false );
-	window.addEventListener( 'resize', onWindowResize, false );
-
-}
-
-function buildGUI(){
-
+	/********************************
+		GUI
+	********************************/
+	
 	var gui = new dat.GUI();
 	gui.add( t, 'multiplier', 0, 5).name( 'Orbit Speed' );
-
-	// var labelFolder = gui.addFolder( 'Label Visibility' );
-	// labelFolder.open();
-	// for ( var i in labels ){
-	// 	labelFolder.add( labels[i], 'visible' ).name( labels[i].name + ' label'  );
-	// }
 
 	gui.add(ssScale, 's', .000001, .00001)
 		.name('SS Scale')
@@ -240,50 +358,11 @@ function buildGUI(){
 	camFolder.add( camTwo, 'tween' ).name( 'Camera Two' );
 	camFolder.add( camThree, 'tween' ).name( 'Camera Three' );
 
-}
 
-function setupScene(){
-
-	solarSystem = makeSolarSystem();
-
-    var systemSize = 10000;
-    var stars = new THREE.Geometry();
-
-    for ( i = 0; i < 20000; i ++ ) {
-
-        var vertex = new THREE.Vector3();
-        vertex.x = Math.random() * systemSize - systemSize/2;
-        vertex.y = Math.random() * systemSize - systemSize/2;
-        vertex.z = Math.random() * systemSize - systemSize/2;
-
-        stars.vertices.push( vertex );
-
-    }
-
-    var starMaterial =   new THREE.ParticleBasicMaterial({
-        color: 0xFFFFFF,
-        size: 20,
-        map: THREE.ImageUtils.loadTexture( "textures/star.png" ),
-        blending: THREE.AdditiveBlending,
-        transparent: true
-    });
-
-    var starField = new THREE.ParticleSystem( stars, starMaterial );
-
-    starField.rotation.x = Math.random() * 6;
-    starField.rotation.y = Math.random() * 6;
-    starField.rotation.z = Math.random() * 6;
-
-	solarSystem.add( starField );
-
-	lensFlares = new THREE.Object3D();
-	var override = THREE.ImageUtils.loadTexture( "textures/lensflare/hexangle.png" );
-	var sunFlare = addLensFlare( 0, 0, 10, 5, override );
-	// lensFlares.add( sunFlare );
-
-	scene.add( dae );
-	scene.add( solarSystem );
-	scene.add( lensFlares );
+	// Event Listeners
+	document.addEventListener( 'mousedown', onDocumentMouseDown, false );
+	document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+	window.addEventListener( 'resize', onWindowResize, false );
 
 }
 
@@ -296,8 +375,44 @@ function onDocumentMouseMove( event ) {
 
 }
 
-function onWindowResize() {
+function onDocumentMouseDown( event ) {
 
+	var vector,
+		projector,
+		raycaster,
+		intersects,
+		CLICKED,
+		posCLICKED,
+		lookAtCLICKED,
+		zScale,
+		camCLICKED;
+
+	vector = new THREE.Vector3( mouse.x, mouse.y, 1 );
+
+	projector = new THREE.Projector();
+	projector.unprojectVector( vector, camera );
+
+	raycaster = new THREE.Raycaster( camera.position, vector.sub( camera.position ).normalize() );
+	intersects = raycaster.intersectObjects( solarSystem.children );
+
+	//if ( event.shiftKey && intersects.length > 0 ) {
+	if ( intersects.length > 0 ) { 
+
+		CLICKED = intersects[ 0 ].object;
+
+		posCLICKED = new THREE.Vector3();
+		posCLICKED.getPositionFromMatrix( CLICKED.matrixWorld );
+
+		zScale = CLICKED.scale.z * 5;
+		lookAtCLICKED = { x: posCLICKED.x + 50, y: posCLICKED.y + 50, z: posCLICKED.z + zScale };
+
+		camCLICKED = new camPosition( lookAtCLICKED, posCLICKED, 1000 );
+		camCLICKED.tween();
+	}
+
+}
+
+function onWindowResize() {
 
 	windowHalfX = $(window).width() / 2;
 	windowHalfY = $(window).height() / 2;
@@ -317,30 +432,11 @@ function animate() {
 	camera.lookAt( camTarget );
 
 	updateRulers();
-
 	controls.update();
 	stats.update();
 	TWEEN.update();
 	setSolarSystemScale();
 	planetsOrbit( t.count );
-
-	var vector = new THREE.Vector3( mouse.x, mouse.y, 1 );
-	projector.unprojectVector( vector, camera );
-
-	var raycaster = new THREE.Raycaster( camera.position, vector.sub( camera.position ).normalize() );
-
-	var intersects = raycaster.intersectObjects( solarSystem.children );
-
-	if ( intersects.length > 0 ) {
-		if ( INTERSECTED != intersects[ 0 ].object ) {
-			INTERSECTED = intersects[ 0 ].object;
-		}
-	} else {
-		if ( INTERSECTED != null){
-
-		}
-		INTERSECTED = null;
-	}	
 
 	scene.updateMatrixWorld();
 
