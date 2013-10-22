@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<shader>
+	<vertex>
+		<![CDATA[
+			void main() {
+  				gl_Position = projectionMatrix *
+                modelViewMatrix *
+                vec4(position,1.0);
+			}
+
+		]]>	
+	</vertex>
+	<fragment>
+		<![CDATA[
+			void main() {
+				gl_FragColor = vec4(1,0.4,0.8,1.0);
+			}
+		]]>
+	</fragment>	
+</shader>
