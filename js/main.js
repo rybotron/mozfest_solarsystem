@@ -291,7 +291,89 @@ function initThreeD() {
 	var sunFlare = addLensFlare( 0, 0, 10, 5, override );
 	lensFlares.add( sunFlare );
 
-	scene.add( dae );
+
+	var sideScale = 1;
+	var sideSize = 1024;
+
+	var skybox = new THREE.Object3D();
+
+	var sides = [
+		{	
+			name: 'front',
+			url: 'textures/skybox/skybox_07.jpg',
+			position: new THREE.Vector3( 0, 0,  sideSize ),
+			rotation: new THREE.Vector3( 0, Math.PI, 0 ),
+			scale: new THREE.Vector3( sideScale, sideScale, sideScale )
+		},{	
+			name: 'back',
+			url: 'textures/skybox/skybox_05.jpg', 
+			position: new THREE.Vector3( 0, 0, -sideSize ),
+			rotation: new THREE.Vector3( 0, 0, 0 ),
+			scale: new THREE.Vector3( sideScale, sideScale, sideScale )
+		},{	
+			name: 'left',
+			url: 'textures/skybox/skybox_04.jpg',
+			position: new THREE.Vector3( -sideSize, 0, 0 ),
+			rotation: new THREE.Vector3( 0, Math.PI / 2, 0 ),
+			scale: new THREE.Vector3( sideScale, sideScale, sideScale )
+		},{
+			name: 'right',
+			url: 'textures/skybox/skybox_06.jpg',
+			position: new THREE.Vector3( sideSize, 0, 0 ),
+			rotation: new THREE.Vector3( 0, -Math.PI / 2, 0 ),
+			scale: new THREE.Vector3( sideScale, sideScale, sideScale )
+		},{
+			name: 'top',
+			url: 'textures/skybox/skybox_02.jpg',
+			position: new THREE.Vector3( 0, -sideSize, 0 ),
+			rotation: new THREE.Vector3( - Math.PI / 2, 0, Math.PI ),
+			scale: new THREE.Vector3( sideScale, sideScale, sideScale )
+		},{
+			name: 'bottom',
+			url: 'textures/skybox/skybox_09.jpg',
+			position: new THREE.Vector3( 0,  sideSize, 0 ),
+			rotation: new THREE.Vector3( Math.PI / 2, 0, Math.PI ),
+			scale: new THREE.Vector3( sideScale, sideScale, sideScale )
+		}
+	];
+
+	for ( var i = 0; i < sides.length; i ++ ) {
+
+		var side = sides[ i ];
+
+		var sidePlane = new THREE.PlaneGeometry( sideSize,  sideSize );
+		var sideMat = new THREE.MeshLambertMaterial( {
+			map: THREE.ImageUtils.loadTexture( sides[i].url ),
+			overdraw: true,
+			fog: true
+		});
+
+		var sideMesh = new THREE.Mesh( sidePlane, sideMat );
+		sideMesh.frustumCulled = false;
+
+		var vec = new THREE.Vector3();
+		vec.multiplyVectors( side.position, side.scale );
+
+		sideMesh.position = vec;
+		sideMesh.rotation.x = side.rotation.x;
+		sideMesh.rotation.y = side.rotation.y;
+		sideMesh.rotation.z = side.rotation.z;
+		sideMesh.scale.x = side.scale.x * 2;
+		sideMesh.scale.y = side.scale.y * 2;
+		sideMesh.scale.z = side.scale.z * 2;
+
+		console.log( sideMesh.position );
+
+		skybox.add( sideMesh );
+
+	}
+
+	skybox.scale.set( 15, 15, 15);
+	scene.add(skybox);
+
+	// Load Collada
+	// scene.add( dae );
+
 	scene.add( solarSystem );
 	scene.add( lensFlares );
 
